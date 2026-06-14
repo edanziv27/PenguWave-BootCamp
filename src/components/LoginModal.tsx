@@ -30,41 +30,50 @@ export default function LoginModal({ onClose }: LoginModalProps) {
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <button className="modal-close" onClick={onClose}>
+        <button className="modal-close" onClick={onClose} aria-label="Close">
           ✕
         </button>
-        <h2>Sign In</h2>
-        <p style={{ color: "var(--text-muted)", marginBottom: 20, fontSize: 14 }}>
-          Enter your credentials to access PenguWave
-        </p>
+        <h2>Sign in</h2>
+        <p className="modal-subtitle">Enter your credentials to access PenguWave</p>
+
         <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: 12 }}>
-            <label>Email</label>
+          <div className="form-field">
+            <label htmlFor="login-email">Email</label>
             <input
+              id="login-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@company.com"
+              autoComplete="username"
             />
           </div>
-          <div style={{ marginBottom: 16 }}>
-            <label>Password</label>
+          <div className="form-field">
+            <label htmlFor="login-password">Password</label>
             <input
+              id="login-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
+              autoComplete="current-password"
             />
           </div>
+
           {error && (
-            <p role="alert" style={{ color: "#b71c1c", fontSize: 13, marginBottom: 12 }}>
+            <p role="alert" className="modal-error">
               {error}
             </p>
           )}
-          <button type="submit" className="btn-primary" style={{ width: "100%" }} disabled={loading}>
-            {loading ? "Signing in…" : "Sign In"}
+
+          <button type="submit" className="btn-primary btn-block" disabled={loading}>
+            {loading ? "Signing in…" : "Sign in"}
           </button>
         </form>
+
+        <p className="modal-note">
+          Demo only — no backend is connected, so sign-in won't persist a session.
+        </p>
       </div>
     </div>
   );

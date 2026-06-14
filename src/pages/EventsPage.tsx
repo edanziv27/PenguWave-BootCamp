@@ -57,7 +57,12 @@ export default function EventsPage() {
 
   return (
     <div className="page-container">
-      <h1>Security Events</h1>
+      <div className="page-header">
+        <div>
+          <h1>Security Events</h1>
+          <p className="page-subtitle">Triage and investigate security events across your infrastructure</p>
+        </div>
+      </div>
 
       <EventsOverview events={visible} />
 
