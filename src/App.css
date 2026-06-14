@@ -314,13 +314,74 @@ label {
 /* Events page controls + layout */
 .events-controls {
   display: flex;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 10px;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
-.events-controls input {
-  width: 100%;
+.events-controls input[type="text"] {
+  flex: 1 1 220px;
+  min-width: 180px;
+  max-width: 380px;
+  width: auto;
+  margin-top: 0;
+}
+
+.events-controls select {
+  width: auto;
+  min-width: 140px;
+  max-width: 220px;
+  margin-top: 0;
+}
+
+/* Active filter chips */
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.filter-chip button {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0;
+}
+
+.filter-chip button:hover {
+  color: var(--text);
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 40px 16px;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.empty-state button {
+  margin-top: 12px;
 }
 
 .events-toolbar {

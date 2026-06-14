@@ -50,6 +50,14 @@ export function formatTimestamp(ts: string): { label: string; isFuture: boolean 
 }
 
 /**
+ * Parse a timestamp to epoch milliseconds for sorting. Returns NaN for
+ * invalid/missing values so callers can push them to the end deterministically.
+ */
+export function timestampMs(ts: string): number {
+  return new Date(ts).getTime();
+}
+
+/**
  * Detect data-quality problems in an event so the UI can flag, not crash on, them.
  */
 export function eventDataIssues(event: SecurityEvent): string[] {
