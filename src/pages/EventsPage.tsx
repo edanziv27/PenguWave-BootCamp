@@ -1,159 +1,148 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import mockEvents from "../../data/mock_events.json";
 import { SecurityEvent } from "../types";
-import { sanitizeHtml } from "../utils";
+import { loadSettings } from "../settings";
+import {
+  DEFAULT_FILTERS,
+  EventFilters,
+  FilterCategory,
+  SortKey,
+  deriveFacets,
+  filterEvents,
+  sortEvents,
+} from "../eventQuery";
+import Tabs from "../components/Tabs";
+import EventExplorer from "../components/EventExplorer";
+import OverviewTab from "../components/OverviewTab";
+import InsightsTab from "../components/InsightsTab";
+import DataQualityTab from "../components/DataQualityTab";
+import AskAiPlaceholderButton from "../components/AskAiPlaceholderButton";
+
+const TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "insights", label: "Insights" },
+  { id: "explorer", label: "Event Explorer" },
+  { id: "data-quality", label: "Data Quality" },
+];
+const TAB_IDS = TABS.map((t) => t.id);
 
 export default function EventsPage() {
-  const [search, setSearch] = useState("");
-  const [severityFilter, setSeverityFilter] = useState("ALL");
-  const [selectedEvent, setSelectedEvent] = useState<SecurityEvent | null>(null);
+  const events = useMemo(() => mockEvents as SecurityEvent[], []);
+  const [settings] = useState(loadSettings);
 
-  const events = mockEvents as SecurityEvent[];
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab") ?? "overview";
+  const activeTab = TAB_IDS.includes(tabParam) ? tabParam : "overview";
+  const setActiveTab = (id: string) => setSearchParams({ tab: id }, { replace: true });
 
-  const filtered = events.filter((e) => {
-    const matchesSearch =
-      e.title.toLowerCase().includes(search.toLowerCase()) ||
-      e.description.toLowerCase().includes(search.toLowerCase()) ||
-      e.assetHostname.toLowerCase().includes(search.toLowerCase());
-    const matchesSeverity = severityFilter === "ALL" || e.severity === severityFilter;
-    return matchesSearch && matchesSeverity;
+  const [filters, setFilters] = useState<EventFilters>({
+    ...DEFAULT_FILTERS,
+    severities:
+      settings.dashboard.defaultSeverity === "ALL" ? [] : [settings.dashboard.defaultSeverity],
   });
+  const [sort, setSort] = useState<SortKey>(settings.dashboard.defaultSort);
+  const [selectedEvent, setSelectedEvent] = useState<SecurityEvent | null>(null);
+  const [rowsPerPage, setRowsPerPage] = useState<number | "all">(25);
+  const [page, setPage] = useState(1);
 
-  const severityColor = (s: string) => {
-    if (s === "HIGH") return "red";
-    if (s === "MEDIUM") return "orange";
-    return "green";
+  const facets = useMemo(() => deriveFacets(events), [events]);
+  const filtered = useMemo(() => filterEvents(events, filters), [events, filters]);
+  const visible = useMemo(() => sortEvents(filtered, sort), [filtered, sort]);
+
+  // Any change to the result set or page size returns to page 1.
+  const setCategory = (key: FilterCategory, values: string[]) => {
+    setFilters((prev) => ({ ...prev, [key]: values }));
+    setPage(1);
+  };
+  const setSearch = (value: string) => {
+    setFilters((prev) => ({ ...prev, search: value }));
+    setPage(1);
+  };
+  const resetFilters = () => {
+    setFilters(DEFAULT_FILTERS);
+    setPage(1);
+  };
+  const changeSort = (value: SortKey) => {
+    setSort(value);
+    setPage(1);
+  };
+  const changeRowsPerPage = (value: number | "all") => {
+    setRowsPerPage(value);
+    setPage(1);
+  };
+
+  // Deep-link from the read-only tabs into the Explorer with a filter applied.
+  const drillTo = (partial: Partial<EventFilters>) => {
+    setFilters({ ...DEFAULT_FILTERS, ...partial });
+    setPage(1);
+    setActiveTab("explorer");
+  };
+  // Open a specific event in the Explorer (clear filters so it is guaranteed visible).
+  const openEvent = (event: SecurityEvent) => {
+    setFilters(DEFAULT_FILTERS);
+    setPage(1);
+    setSelectedEvent(event);
+    setActiveTab("explorer");
   };
 
   return (
     <div className="page-container">
-      <h1>Security Events</h1>
-
-      <div style={{ marginBottom: 16, display: "flex", gap: 12, alignItems: "center" }}>
-        <input
-          type="text"
-          placeholder="Search events..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{ width: "100%", maxWidth: 400 }}
-        />
-        <select
-          value={severityFilter}
-          onChange={(e) => setSeverityFilter(e.target.value)}
-          style={{ width: 140 }}
-        >
-          <option value="ALL">All Severities</option>
-          <option value="HIGH">High</option>
-          <option value="MEDIUM">Medium</option>
-          <option value="LOW">Low</option>
-        </select>
-      </div>
-
-      {search && (
-        <p>
-          <span
-            dangerouslySetInnerHTML={{
-              __html: sanitizeHtml("Showing results for: <strong>" + search + "</strong>"),
-            }}
-          />
-          {" "}({filtered.length} events)
-        </p>
-      )}
-
-      <table>
-        <thead>
-          <tr>
-            <th>Severity</th>
-            <th>Title</th>
-            <th>Asset</th>
-            <th>Source IP</th>
-            <th>Timestamp</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filtered.map((event) => (
-            <tr
-              key={event.id}
-              onClick={() => setSelectedEvent(event)}
-              style={{ cursor: "pointer" }}
-            >
-              <td style={{ color: severityColor(event.severity), fontWeight: 600 }}>
-                {event.severity}
-              </td>
-              <td>{event.title}</td>
-              <td style={{ fontFamily: "monospace", fontSize: 13 }}>
-                {event.assetHostname}
-              </td>
-              <td style={{ fontFamily: "monospace", fontSize: 13 }}>
-                {event.sourceIp}
-              </td>
-              <td style={{ fontSize: 13 }}>
-                {new Date(event.timestamp).toLocaleString()}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {filtered.length === 0 && <p style={{ color: "#999" }}>No events found.</p>}
-
-      <div style={{ marginTop: 12 }}>
-        <button
-          onClick={() => {
-            const blob = new Blob([JSON.stringify(filtered, null, 2)], { type: "application/json" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "penguwave_events_export.json";
-            a.click();
-            URL.revokeObjectURL(url);
-          }}
-          style={{ fontSize: 13 }}
-        >
-          Export Events (JSON)
-        </button>
-      </div>
-
-      {/* Inline event detail */}
-      {selectedEvent && (
-        <div className="event-detail">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h2>{selectedEvent.title}</h2>
-            <button onClick={() => setSelectedEvent(null)} style={{ cursor: "pointer" }}>
-              Close
-            </button>
-          </div>
-          <p>
-            <strong>Severity:</strong>{" "}
-            <span style={{ color: severityColor(selectedEvent.severity) }}>
-              {selectedEvent.severity}
-            </span>
+      <div className="page-header">
+        <div>
+          <h1>Security Operations</h1>
+          <p className="page-subtitle">
+            Mission control for triaging and investigating security events
           </p>
-          <p>
-            <strong>Description:</strong>
-          </p>
-          {/* render rich text descriptions */}
-          <div
-            ref={(el) => {
-              if (el) el.innerHTML = sanitizeHtml(selectedEvent.description);
-            }}
-          />
-          <p>
-            <strong>Asset:</strong> {selectedEvent.assetHostname} ({selectedEvent.assetIp})
-          </p>
-          <p>
-            <strong>Source IP:</strong> {selectedEvent.sourceIp}
-          </p>
-          <p>
-            <strong>Tags:</strong> {selectedEvent.tags.join(", ")}
-          </p>
-          <p>
-            <strong>Timestamp:</strong> {new Date(selectedEvent.timestamp).toLocaleString()}
-          </p>
-          <h3>Raw Event Data</h3>
-          <pre>{JSON.stringify(selectedEvent, null, 2)}</pre>
         </div>
-      )}
+        <AskAiPlaceholderButton
+          label="Ask AI"
+          context="Ask AI is planned for future investigation assistance."
+        />
+      </div>
+
+      <Tabs tabs={TABS} active={activeTab} onChange={setActiveTab} />
+
+      <div role="tabpanel" aria-label={activeTab}>
+        {activeTab === "overview" && (
+          <OverviewTab
+            events={events}
+            onDrill={drillTo}
+            onOpenEvent={openEvent}
+            onGoTab={setActiveTab}
+          />
+        )}
+
+        {activeTab === "insights" && (
+          <InsightsTab events={events} onDrill={drillTo} onOpenEvent={openEvent} />
+        )}
+
+        {activeTab === "explorer" && (
+          <EventExplorer
+            totalCount={events.length}
+            facets={facets}
+            filters={filters}
+            setCategory={setCategory}
+            setSearch={setSearch}
+            resetFilters={resetFilters}
+            sort={sort}
+            changeSort={changeSort}
+            visible={visible}
+            rowsPerPage={rowsPerPage}
+            changeRowsPerPage={changeRowsPerPage}
+            page={page}
+            setPage={setPage}
+            selectedEvent={selectedEvent}
+            onSelect={setSelectedEvent}
+            onClosePanel={() => setSelectedEvent(null)}
+            settings={settings}
+          />
+        )}
+
+        {activeTab === "data-quality" && (
+          <DataQualityTab events={events} onOpenEvent={openEvent} />
+        )}
+      </div>
     </div>
   );
 }

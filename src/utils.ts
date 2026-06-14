@@ -1,22 +1,133 @@
 // Shared helpers for PenguWave.
 
+import type { Severity, SecurityEvent } from "./types";
+
+// Severity ordering, most severe first. Use for any sorting/ranking.
+export const SEVERITY_ORDER: Severity[] = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
+
+const SEVERITY_COLORS: Record<Severity, string> = {
+  CRITICAL: "#b71c1c", // deep red — most severe, distinct from HIGH
+  HIGH: "#e53935",
+  MEDIUM: "#fb8c00",
+  LOW: "#43a047",
+};
+
 /**
- * Sanitize a string before rendering it as HTML.
- * Strips dangerous markup so values can be safely shown to the user.
+ * Color for a severity. Unknown/unexpected values get a neutral gray —
+ * never the LOW/green color, so an unrecognized severity can't look benign.
  */
-export function sanitizeHtml(input: string): string {
-  // TODO: wire up DOMPurify
-  return input;
+export function severityColor(severity: string): string {
+  return SEVERITY_COLORS[severity as Severity] ?? "#757575";
 }
 
 /**
- * Serialize a list of records to CSV for export.
+ * Rank for sorting: higher is more severe. Unknown severities sort last.
+ */
+export function severityRank(severity: string): number {
+  const idx = SEVERITY_ORDER.indexOf(severity as Severity);
+  return idx === -1 ? -1 : SEVERITY_ORDER.length - idx;
+}
+
+/**
+ * Safely turn a possibly null/empty value into something displayable.
+ */
+export function displayValue(value: unknown, fallback = "—"): string {
+  if (value === null || value === undefined) return fallback;
+  const s = String(value).trim();
+  return s === "" ? fallback : s;
+}
+
+/**
+ * Format a timestamp for display, tolerating invalid values, and flag
+ * timestamps that are in the future (a common data-quality problem).
+ */
+export function formatTimestamp(ts: string): { label: string; isFuture: boolean } {
+  const date = new Date(ts);
+  if (isNaN(date.getTime())) {
+    return { label: displayValue(ts), isFuture: false };
+  }
+  return { label: date.toLocaleString(), isFuture: date.getTime() > Date.now() };
+}
+
+/**
+ * Parse a timestamp to epoch milliseconds for sorting. Returns NaN for
+ * invalid/missing values so callers can push them to the end deterministically.
+ */
+export function timestampMs(ts: string): number {
+  return new Date(ts).getTime();
+}
+
+/**
+ * Detect data-quality problems in an event so the UI can flag, not crash on, them.
+ */
+export function eventDataIssues(event: SecurityEvent): string[] {
+  const issues: string[] = [];
+  if (formatTimestamp(event.timestamp).isFuture) issues.push("Timestamp is in the future");
+  if (!event.sourceIp) issues.push("Missing source IP");
+  if (event.sourceIp === "unknown" || event.assetIp === "unknown") issues.push("Unknown IP address");
+  if (!event.description || event.description.trim() === "") issues.push("Empty description");
+  if (!event.userId) issues.push("Missing owning user");
+  return issues;
+}
+
+/**
+ * Whether an IP looks external (a routable IPv4 outside RFC1918 private ranges).
+ * Missing/placeholder/non-IPv4 values are treated as "not known external".
+ */
+export function isExternalIp(ip: string | null): boolean {
+  if (!ip || ip === "unknown") return false;
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) return false;
+  if (/^10\./.test(ip)) return false;
+  if (/^192\.168\./.test(ip)) return false;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return false;
+  return true;
+}
+
+/**
+ * Lightweight, deterministic "why this matters" signals for an event.
+ * Rule-based only — no scoring model, no AI.
+ */
+export function whyThisMatters(event: SecurityEvent): string[] {
+  const reasons: string[] = [];
+  if (event.severity === "CRITICAL") {
+    reasons.push("Critical severity — treat as the highest priority.");
+  } else if (event.severity === "HIGH") {
+    reasons.push("High severity — prioritize for investigation.");
+  }
+  if ((event.assetHostname ?? "").toLowerCase().includes("prod")) {
+    reasons.push("Affects a production asset.");
+  }
+  if (isExternalIp(event.sourceIp)) {
+    reasons.push("Source IP appears to be external to the corporate network.");
+  }
+  if (eventDataIssues(event).length > 0) {
+    reasons.push("Event has data-quality issues — verify against the source before acting.");
+  }
+  return reasons;
+}
+
+/**
+ * Escape a single CSV cell: neutralize spreadsheet formula injection (values
+ * starting with = + - @ or control chars get a leading apostrophe) and quote
+ * fields containing commas, quotes, or newlines.
+ */
+function csvCell(value: unknown): string {
+  let s = value === null || value === undefined ? "" : String(value);
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  if (/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+/**
+ * Serialize a list of records to CSV for export. Quotes/escapes fields and
+ * neutralizes formula injection. (Currently unused — the app exports JSON —
+ * but kept safe so any future CSV export can't carry an injection payload.)
  */
 export function toCsv(rows: Record<string, unknown>[]): string {
   if (rows.length === 0) return "";
   const headers = Object.keys(rows[0]);
-  const lines = rows.map((r) => headers.map((h) => String(r[h] ?? "")).join(","));
-  return [headers.join(","), ...lines].join("\n");
+  const lines = rows.map((r) => headers.map((h) => csvCell(r[h])).join(","));
+  return [headers.map(csvCell).join(","), ...lines].join("\n");
 }
 
 /**
