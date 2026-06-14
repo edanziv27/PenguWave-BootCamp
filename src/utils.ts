@@ -74,7 +74,7 @@ export function eventDataIssues(event: SecurityEvent): string[] {
  * Whether an IP looks external (a routable IPv4 outside RFC1918 private ranges).
  * Missing/placeholder/non-IPv4 values are treated as "not known external".
  */
-function isExternalIp(ip: string | null): boolean {
+export function isExternalIp(ip: string | null): boolean {
   if (!ip || ip === "unknown") return false;
   if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) return false;
   if (/^10\./.test(ip)) return false;

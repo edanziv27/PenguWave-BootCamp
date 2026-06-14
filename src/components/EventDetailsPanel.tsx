@@ -2,6 +2,7 @@ import { SecurityEvent } from "../types";
 import { displayValue, formatTimestamp, eventDataIssues, whyThisMatters } from "../utils";
 import SeverityBadge from "./SeverityBadge";
 import DataQualityBadge from "./DataQualityBadge";
+import AskAiPlaceholderButton from "./AskAiPlaceholderButton";
 
 interface EventDetailsPanelProps {
   event: SecurityEvent;
@@ -33,6 +34,18 @@ export default function EventDetailsPanel({ event, onClose }: EventDetailsPanelP
       </div>
 
       <h2 className="event-panel-title">{displayValue(event.title)}</h2>
+
+      <AskAiPlaceholderButton
+        label="Ask AI about this event"
+        context="I can help you investigate this event."
+        block
+        suggestions={[
+          "Why does this event matter?",
+          "What should I investigate first?",
+          "Find related events",
+          "Suggest next steps",
+        ]}
+      />
 
       <DataQualityBadge issues={issues} />
 

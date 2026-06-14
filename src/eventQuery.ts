@@ -4,18 +4,21 @@ import { severityRank, timestampMs } from "./utils";
 
 export interface EventFilters {
   search: string;
-  severity: string; // "ALL" or a severity value
-  asset: string; // "ALL" or an asset hostname
-  sourceIp: string; // "ALL" or a source IP
-  tag: string; // "ALL" or a tag
+  severities: string[];
+  assets: string[];
+  sourceIps: string[];
+  tags: string[];
 }
+
+/** The multi-select filter categories (everything except free-text search). */
+export type FilterCategory = "severities" | "assets" | "sourceIps" | "tags";
 
 export const DEFAULT_FILTERS: EventFilters = {
   search: "",
-  severity: "ALL",
-  asset: "ALL",
-  sourceIp: "ALL",
-  tag: "ALL",
+  severities: [],
+  assets: [],
+  sourceIps: [],
+  tags: [],
 };
 
 export const SORT_OPTIONS = [
@@ -48,15 +51,18 @@ export function matchesSearch(event: SecurityEvent, query: string): boolean {
   return haystack.includes(q);
 }
 
-/** Apply all filters together (logical AND). */
+/**
+ * Apply all filters together. Within a category the selected values are OR'd;
+ * across categories the categories are AND'd. An empty category matches all.
+ */
 export function filterEvents(events: SecurityEvent[], f: EventFilters): SecurityEvent[] {
   return events.filter(
     (e) =>
       matchesSearch(e, f.search) &&
-      (f.severity === "ALL" || e.severity === f.severity) &&
-      (f.asset === "ALL" || e.assetHostname === f.asset) &&
-      (f.sourceIp === "ALL" || e.sourceIp === f.sourceIp) &&
-      (f.tag === "ALL" || (e.tags ?? []).includes(f.tag))
+      (f.severities.length === 0 || f.severities.includes(e.severity)) &&
+      (f.assets.length === 0 || (e.assetHostname != null && f.assets.includes(e.assetHostname))) &&
+      (f.sourceIps.length === 0 || (e.sourceIp != null && f.sourceIps.includes(e.sourceIp))) &&
+      (f.tags.length === 0 || (e.tags ?? []).some((t) => f.tags.includes(t)))
   );
 }
 

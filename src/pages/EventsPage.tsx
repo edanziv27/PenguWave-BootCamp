@@ -1,236 +1,146 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import mockEvents from "../../data/mock_events.json";
 import { SecurityEvent } from "../types";
-import { toCsv } from "../utils";
 import { loadSettings } from "../settings";
-import EventsOverview from "../components/EventsOverview";
-import EventsTable from "../components/EventsTable";
-import EventDetailsPanel from "../components/EventDetailsPanel";
 import {
   DEFAULT_FILTERS,
   EventFilters,
-  SORT_OPTIONS,
+  FilterCategory,
   SortKey,
   deriveFacets,
   filterEvents,
   sortEvents,
 } from "../eventQuery";
+import Tabs from "../components/Tabs";
+import EventExplorer from "../components/EventExplorer";
+import OverviewTab from "../components/OverviewTab";
+import InsightsTab from "../components/InsightsTab";
+import DataQualityTab from "../components/DataQualityTab";
+import AskAiPlaceholderButton from "../components/AskAiPlaceholderButton";
+
+const TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "insights", label: "Insights" },
+  { id: "explorer", label: "Event Explorer" },
+  { id: "data-quality", label: "Data Quality" },
+];
+const TAB_IDS = TABS.map((t) => t.id);
 
 export default function EventsPage() {
   const events = useMemo(() => mockEvents as SecurityEvent[], []);
-
-  // Read saved preferences once on mount; they seed the initial view.
   const [settings] = useState(loadSettings);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab") ?? "overview";
+  const activeTab = TAB_IDS.includes(tabParam) ? tabParam : "overview";
+  const setActiveTab = (id: string) => setSearchParams({ tab: id }, { replace: true });
 
   const [filters, setFilters] = useState<EventFilters>({
     ...DEFAULT_FILTERS,
-    severity: settings.dashboard.defaultSeverity,
+    severities:
+      settings.dashboard.defaultSeverity === "ALL" ? [] : [settings.dashboard.defaultSeverity],
   });
   const [sort, setSort] = useState<SortKey>(settings.dashboard.defaultSort);
   const [selectedEvent, setSelectedEvent] = useState<SecurityEvent | null>(null);
+  const [rowsPerPage, setRowsPerPage] = useState<number | "all">(25);
+  const [page, setPage] = useState(1);
 
   const facets = useMemo(() => deriveFacets(events), [events]);
   const filtered = useMemo(() => filterEvents(events, filters), [events, filters]);
   const visible = useMemo(() => sortEvents(filtered, sort), [filtered, sort]);
 
-  const setFilter = (key: keyof EventFilters, value: string) =>
-    setFilters((prev) => ({ ...prev, [key]: value }));
+  // Any change to the result set or page size returns to page 1.
+  const setCategory = (key: FilterCategory, values: string[]) => {
+    setFilters((prev) => ({ ...prev, [key]: values }));
+    setPage(1);
+  };
+  const setSearch = (value: string) => {
+    setFilters((prev) => ({ ...prev, search: value }));
+    setPage(1);
+  };
+  const resetFilters = () => {
+    setFilters(DEFAULT_FILTERS);
+    setPage(1);
+  };
+  const changeSort = (value: SortKey) => {
+    setSort(value);
+    setPage(1);
+  };
+  const changeRowsPerPage = (value: number | "all") => {
+    setRowsPerPage(value);
+    setPage(1);
+  };
 
-  const resetFilters = () => setFilters(DEFAULT_FILTERS);
-
-  const clearChip = (key: keyof EventFilters) =>
-    setFilter(key, key === "search" ? "" : "ALL");
-
-  const activeChips = (
-    [
-      filters.search && { key: "search", label: `Search: "${filters.search}"` },
-      filters.severity !== "ALL" && { key: "severity", label: `Severity: ${filters.severity}` },
-      filters.asset !== "ALL" && { key: "asset", label: `Asset: ${filters.asset}` },
-      filters.sourceIp !== "ALL" && { key: "sourceIp", label: `Source IP: ${filters.sourceIp}` },
-      filters.tag !== "ALL" && { key: "tag", label: `Tag: ${filters.tag}` },
-    ] as Array<false | { key: keyof EventFilters; label: string }>
-  ).filter(Boolean) as Array<{ key: keyof EventFilters; label: string }>;
-
-  const hasActiveFilters = activeChips.length > 0;
-
-  const exportEvents = () => {
-    const { format, includeRaw } = settings.export;
-    let content: string;
-    let filename: string;
-    let type: string;
-
-    if (format === "csv") {
-      const rows = visible.map((e) => ({
-        id: e.id,
-        timestamp: e.timestamp,
-        severity: e.severity,
-        title: e.title,
-        assetHostname: e.assetHostname,
-        assetIp: e.assetIp,
-        sourceIp: e.sourceIp,
-        tags: (e.tags ?? []).join("|"),
-        userId: e.userId,
-      }));
-      content = toCsv(rows);
-      filename = "penguwave_events_export.csv";
-      type = "text/csv";
-    } else {
-      const data = includeRaw
-        ? visible
-        : visible.map((e) => ({
-            id: e.id,
-            timestamp: e.timestamp,
-            severity: e.severity,
-            title: e.title,
-            assetHostname: e.assetHostname,
-            sourceIp: e.sourceIp,
-          }));
-      content = JSON.stringify(data, null, 2);
-      filename = "penguwave_events_export.json";
-      type = "application/json";
-    }
-
-    const blob = new Blob([content], { type });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+  // Deep-link from the read-only tabs into the Explorer with a filter applied.
+  const drillTo = (partial: Partial<EventFilters>) => {
+    setFilters({ ...DEFAULT_FILTERS, ...partial });
+    setPage(1);
+    setActiveTab("explorer");
+  };
+  // Open a specific event in the Explorer (clear filters so it is guaranteed visible).
+  const openEvent = (event: SecurityEvent) => {
+    setFilters(DEFAULT_FILTERS);
+    setPage(1);
+    setSelectedEvent(event);
+    setActiveTab("explorer");
   };
 
   return (
     <div className="page-container">
       <div className="page-header">
         <div>
-          <h1>Security Events</h1>
-          <p className="page-subtitle">Triage and investigate security events across your infrastructure</p>
+          <h1>Security Operations</h1>
+          <p className="page-subtitle">
+            Mission control for triaging and investigating security events
+          </p>
         </div>
-      </div>
-
-      <EventsOverview events={visible} />
-
-      <div className="events-controls">
-        <input
-          type="text"
-          placeholder="Search events..."
-          value={filters.search}
-          onChange={(e) => setFilter("search", e.target.value)}
-          aria-label="Search events"
+        <AskAiPlaceholderButton
+          label="Ask AI"
+          context="Ask AI is planned for future investigation assistance."
         />
-        <select
-          value={filters.severity}
-          onChange={(e) => setFilter("severity", e.target.value)}
-          aria-label="Filter by severity"
-        >
-          <option value="ALL">All Severities</option>
-          <option value="CRITICAL">Critical</option>
-          <option value="HIGH">High</option>
-          <option value="MEDIUM">Medium</option>
-          <option value="LOW">Low</option>
-        </select>
-        <select
-          value={filters.asset}
-          onChange={(e) => setFilter("asset", e.target.value)}
-          aria-label="Filter by asset"
-        >
-          <option value="ALL">All Assets</option>
-          {facets.assets.map((a) => (
-            <option key={a} value={a}>
-              {a}
-            </option>
-          ))}
-        </select>
-        <select
-          value={filters.sourceIp}
-          onChange={(e) => setFilter("sourceIp", e.target.value)}
-          aria-label="Filter by source IP"
-        >
-          <option value="ALL">All Source IPs</option>
-          {facets.sourceIps.map((ip) => (
-            <option key={ip} value={ip}>
-              {ip}
-            </option>
-          ))}
-        </select>
-        {facets.tags.length > 0 && (
-          <select
-            value={filters.tag}
-            onChange={(e) => setFilter("tag", e.target.value)}
-            aria-label="Filter by tag"
-          >
-            <option value="ALL">All Tags</option>
-            {facets.tags.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-        )}
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value as SortKey)}
-          aria-label="Sort events"
-        >
-          {SORT_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-        {hasActiveFilters && (
-          <button className="btn-secondary" onClick={resetFilters}>
-            Clear filters
-          </button>
-        )}
       </div>
 
-      {hasActiveFilters && (
-        <div className="filter-chips">
-          {activeChips.map((chip) => (
-            <span key={chip.key} className="filter-chip">
-              {chip.label}
-              <button onClick={() => clearChip(chip.key)} aria-label={`Remove filter ${chip.label}`}>
-                ✕
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
+      <Tabs tabs={TABS} active={activeTab} onChange={setActiveTab} />
 
-      <div className="events-layout">
-        <div className="events-main">
-          <div className="events-toolbar">
-            <p className="table-meta">
-              Showing {visible.length} of {events.length} events
-            </p>
-            <button className="btn-secondary" onClick={exportEvents}>
-              Export Events ({settings.export.format.toUpperCase()})
-            </button>
-          </div>
+      <div role="tabpanel" aria-label={activeTab}>
+        {activeTab === "overview" && (
+          <OverviewTab
+            events={events}
+            onDrill={drillTo}
+            onOpenEvent={openEvent}
+            onGoTab={setActiveTab}
+          />
+        )}
 
-          {visible.length > 0 ? (
-            <EventsTable
-              events={visible}
-              selectedId={selectedEvent?.id ?? null}
-              onSelect={setSelectedEvent}
-              compact={settings.dashboard.compactTable}
-              showDataQuality={settings.dashboard.showDataQualityWarnings}
-            />
-          ) : (
-            <div className="empty-state">
-              <p>No events match your current search and filters.</p>
-              {hasActiveFilters && (
-                <button className="btn-secondary" onClick={resetFilters}>
-                  Clear filters
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+        {activeTab === "insights" && (
+          <InsightsTab events={events} onDrill={drillTo} onOpenEvent={openEvent} />
+        )}
 
-        {selectedEvent && (
-          <EventDetailsPanel event={selectedEvent} onClose={() => setSelectedEvent(null)} />
+        {activeTab === "explorer" && (
+          <EventExplorer
+            totalCount={events.length}
+            facets={facets}
+            filters={filters}
+            setCategory={setCategory}
+            setSearch={setSearch}
+            resetFilters={resetFilters}
+            sort={sort}
+            changeSort={changeSort}
+            visible={visible}
+            rowsPerPage={rowsPerPage}
+            changeRowsPerPage={changeRowsPerPage}
+            page={page}
+            setPage={setPage}
+            selectedEvent={selectedEvent}
+            onSelect={setSelectedEvent}
+            onClosePanel={() => setSelectedEvent(null)}
+            settings={settings}
+          />
+        )}
+
+        {activeTab === "data-quality" && (
+          <DataQualityTab events={events} onOpenEvent={openEvent} />
         )}
       </div>
     </div>
