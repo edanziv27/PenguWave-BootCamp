@@ -1,26 +1,9 @@
 import { useState } from "react";
 import mockEvents from "../../data/mock_events.json";
 import { SecurityEvent } from "../types";
-import { severityColor, displayValue, formatTimestamp, eventDataIssues } from "../utils";
 import EventsOverview from "../components/EventsOverview";
-
-function SeverityBadge({ severity }: { severity: string }) {
-  return (
-    <span
-      style={{
-        backgroundColor: severityColor(severity),
-        color: "white",
-        padding: "2px 8px",
-        borderRadius: 4,
-        fontSize: 12,
-        fontWeight: 600,
-        whiteSpace: "nowrap",
-      }}
-    >
-      {displayValue(severity)}
-    </span>
-  );
-}
+import EventsTable from "../components/EventsTable";
+import EventDetailsPanel from "../components/EventDetailsPanel";
 
 export default function EventsPage() {
   const [search, setSearch] = useState("");
@@ -39,19 +22,29 @@ export default function EventsPage() {
     return matchesSearch && matchesSeverity;
   });
 
+  const exportJson = () => {
+    const blob = new Blob([JSON.stringify(filtered, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "penguwave_events_export.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="page-container">
       <h1>Security Events</h1>
 
       <EventsOverview events={filtered} />
 
-      <div style={{ marginBottom: 16, display: "flex", gap: 12, alignItems: "center" }}>
+      <div className="events-controls">
         <input
           type="text"
           placeholder="Search events..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ width: "100%", maxWidth: 400 }}
+          style={{ maxWidth: 400 }}
         />
         <select
           value={severityFilter}
@@ -72,140 +65,30 @@ export default function EventsPage() {
         </p>
       )}
 
-      <p className="table-meta">
-        Showing {filtered.length} of {events.length} events
-      </p>
-
-      <table>
-        <thead>
-          <tr>
-            <th>Severity</th>
-            <th>Title</th>
-            <th>Asset</th>
-            <th>Source IP</th>
-            <th>Timestamp</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filtered.map((event) => {
-            const ts = formatTimestamp(event.timestamp);
-            const issues = eventDataIssues(event);
-            return (
-              <tr
-                key={event.id}
-                onClick={() => setSelectedEvent(event)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setSelectedEvent(event);
-                  }
-                }}
-                tabIndex={0}
-                role="button"
-                aria-label={`View details for ${displayValue(event.title)}`}
-                style={{ cursor: "pointer" }}
-              >
-                <td>
-                  <SeverityBadge severity={event.severity} />
-                </td>
-                <td>
-                  {displayValue(event.title)}
-                  {issues.length > 0 && (
-                    <span title={issues.join("; ")} style={{ marginLeft: 6, cursor: "help" }}>
-                      ⚠️
-                    </span>
-                  )}
-                </td>
-                <td style={{ fontFamily: "monospace", fontSize: 13 }}>
-                  {displayValue(event.assetHostname)}
-                </td>
-                <td style={{ fontFamily: "monospace", fontSize: 13 }}>
-                  {displayValue(event.sourceIp)}
-                </td>
-                <td style={{ fontSize: 13 }}>
-                  {ts.label}
-                  {ts.isFuture && (
-                    <span style={{ color: "#ff5470", marginLeft: 6 }} title="Timestamp is in the future">
-                      (future)
-                    </span>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-
-      {filtered.length === 0 && <p style={{ color: "#999" }}>No events found.</p>}
-
-      <div style={{ marginTop: 12 }}>
-        <button
-          onClick={() => {
-            const blob = new Blob([JSON.stringify(filtered, null, 2)], { type: "application/json" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "penguwave_events_export.json";
-            a.click();
-            URL.revokeObjectURL(url);
-          }}
-          style={{ fontSize: 13 }}
-        >
-          Export Events (JSON)
-        </button>
-      </div>
-
-      {/* Inline event detail */}
-      {selectedEvent && (
-        <div className="event-detail">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h2>{displayValue(selectedEvent.title)}</h2>
-            <button onClick={() => setSelectedEvent(null)} style={{ cursor: "pointer" }}>
-              Close
+      <div className="events-layout">
+        <div className="events-main">
+          <div className="events-toolbar">
+            <p className="table-meta">
+              Showing {filtered.length} of {events.length} events
+            </p>
+            <button className="btn-secondary" onClick={exportJson}>
+              Export Events (JSON)
             </button>
           </div>
 
-          {eventDataIssues(selectedEvent).length > 0 && (
-            <p
-              style={{
-                background: "rgba(255, 148, 71, 0.12)",
-                border: "1px solid rgba(255, 148, 71, 0.4)",
-                color: "#ffb784",
-                borderRadius: 8,
-                padding: "8px 10px",
-                fontSize: 13,
-              }}
-            >
-              ⚠️ Data quality: {eventDataIssues(selectedEvent).join("; ")}
-            </p>
-          )}
+          <EventsTable
+            events={filtered}
+            selectedId={selectedEvent?.id ?? null}
+            onSelect={setSelectedEvent}
+          />
 
-          <p>
-            <strong>Severity:</strong> <SeverityBadge severity={selectedEvent.severity} />
-          </p>
-          <p>
-            <strong>Description:</strong>
-          </p>
-          <div style={{ whiteSpace: "pre-wrap" }}>
-            {displayValue(selectedEvent.description, "(no description)")}
-          </div>
-          <p>
-            <strong>Asset:</strong> {displayValue(selectedEvent.assetHostname)} (
-            {displayValue(selectedEvent.assetIp)})
-          </p>
-          <p>
-            <strong>Source IP:</strong> {displayValue(selectedEvent.sourceIp)}
-          </p>
-          <p>
-            <strong>Tags:</strong> {displayValue((selectedEvent.tags ?? []).join(", "))}
-          </p>
-          <p>
-            <strong>Timestamp:</strong> {formatTimestamp(selectedEvent.timestamp).label}
-          </p>
-          <h3>Raw Event Data</h3>
-          <pre>{JSON.stringify(selectedEvent, null, 2)}</pre>
+          {filtered.length === 0 && <p className="no-results">No events found.</p>}
         </div>
-      )}
+
+        {selectedEvent && (
+          <EventDetailsPanel event={selectedEvent} onClose={() => setSelectedEvent(null)} />
+        )}
+      </div>
     </div>
   );
 }

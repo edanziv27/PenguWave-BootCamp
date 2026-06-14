@@ -63,6 +63,42 @@ export function eventDataIssues(event: SecurityEvent): string[] {
 }
 
 /**
+ * Whether an IP looks external (a routable IPv4 outside RFC1918 private ranges).
+ * Missing/placeholder/non-IPv4 values are treated as "not known external".
+ */
+function isExternalIp(ip: string | null): boolean {
+  if (!ip || ip === "unknown") return false;
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) return false;
+  if (/^10\./.test(ip)) return false;
+  if (/^192\.168\./.test(ip)) return false;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return false;
+  return true;
+}
+
+/**
+ * Lightweight, deterministic "why this matters" signals for an event.
+ * Rule-based only — no scoring model, no AI.
+ */
+export function whyThisMatters(event: SecurityEvent): string[] {
+  const reasons: string[] = [];
+  if (event.severity === "CRITICAL") {
+    reasons.push("Critical severity — treat as the highest priority.");
+  } else if (event.severity === "HIGH") {
+    reasons.push("High severity — prioritize for investigation.");
+  }
+  if ((event.assetHostname ?? "").toLowerCase().includes("prod")) {
+    reasons.push("Affects a production asset.");
+  }
+  if (isExternalIp(event.sourceIp)) {
+    reasons.push("Source IP appears to be external to the corporate network.");
+  }
+  if (eventDataIssues(event).length > 0) {
+    reasons.push("Event has data-quality issues — verify against the source before acting.");
+  }
+  return reasons;
+}
+
+/**
  * Escape a single CSV cell: neutralize spreadsheet formula injection (values
  * starting with = + - @ or control chars get a leading apostrophe) and quote
  * fields containing commas, quotes, or newlines.
