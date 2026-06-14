@@ -22,6 +22,9 @@ export default function Navbar({ onLoginClick }: NavbarProps) {
         <Link to="/users" className={location.pathname === "/users" ? "active" : ""}>
           Users
         </Link>
+        <Link to="/settings" className={location.pathname === "/settings" ? "active" : ""}>
+          Settings
+        </Link>
         <CurrentUserBadge onClick={onLoginClick} />
       </div>
     </nav>

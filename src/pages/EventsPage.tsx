@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import mockEvents from "../../data/mock_events.json";
 import { SecurityEvent } from "../types";
+import { toCsv } from "../utils";
+import { loadSettings } from "../settings";
 import EventsOverview from "../components/EventsOverview";
 import EventsTable from "../components/EventsTable";
 import EventDetailsPanel from "../components/EventDetailsPanel";
@@ -17,8 +19,14 @@ import {
 export default function EventsPage() {
   const events = useMemo(() => mockEvents as SecurityEvent[], []);
 
-  const [filters, setFilters] = useState<EventFilters>(DEFAULT_FILTERS);
-  const [sort, setSort] = useState<SortKey>("newest");
+  // Read saved preferences once on mount; they seed the initial view.
+  const [settings] = useState(loadSettings);
+
+  const [filters, setFilters] = useState<EventFilters>({
+    ...DEFAULT_FILTERS,
+    severity: settings.dashboard.defaultSeverity,
+  });
+  const [sort, setSort] = useState<SortKey>(settings.dashboard.defaultSort);
   const [selectedEvent, setSelectedEvent] = useState<SecurityEvent | null>(null);
 
   const facets = useMemo(() => deriveFacets(events), [events]);
@@ -45,12 +53,48 @@ export default function EventsPage() {
 
   const hasActiveFilters = activeChips.length > 0;
 
-  const exportJson = () => {
-    const blob = new Blob([JSON.stringify(visible, null, 2)], { type: "application/json" });
+  const exportEvents = () => {
+    const { format, includeRaw } = settings.export;
+    let content: string;
+    let filename: string;
+    let type: string;
+
+    if (format === "csv") {
+      const rows = visible.map((e) => ({
+        id: e.id,
+        timestamp: e.timestamp,
+        severity: e.severity,
+        title: e.title,
+        assetHostname: e.assetHostname,
+        assetIp: e.assetIp,
+        sourceIp: e.sourceIp,
+        tags: (e.tags ?? []).join("|"),
+        userId: e.userId,
+      }));
+      content = toCsv(rows);
+      filename = "penguwave_events_export.csv";
+      type = "text/csv";
+    } else {
+      const data = includeRaw
+        ? visible
+        : visible.map((e) => ({
+            id: e.id,
+            timestamp: e.timestamp,
+            severity: e.severity,
+            title: e.title,
+            assetHostname: e.assetHostname,
+            sourceIp: e.sourceIp,
+          }));
+      content = JSON.stringify(data, null, 2);
+      filename = "penguwave_events_export.json";
+      type = "application/json";
+    }
+
+    const blob = new Blob([content], { type });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "penguwave_events_export.json";
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -160,8 +204,8 @@ export default function EventsPage() {
             <p className="table-meta">
               Showing {visible.length} of {events.length} events
             </p>
-            <button className="btn-secondary" onClick={exportJson}>
-              Export Events (JSON)
+            <button className="btn-secondary" onClick={exportEvents}>
+              Export Events ({settings.export.format.toUpperCase()})
             </button>
           </div>
 
@@ -170,6 +214,8 @@ export default function EventsPage() {
               events={visible}
               selectedId={selectedEvent?.id ?? null}
               onSelect={setSelectedEvent}
+              compact={settings.dashboard.compactTable}
+              showDataQuality={settings.dashboard.showDataQualityWarnings}
             />
           ) : (
             <div className="empty-state">

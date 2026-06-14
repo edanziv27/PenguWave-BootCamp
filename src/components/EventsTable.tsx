@@ -7,11 +7,19 @@ interface EventsTableProps {
   events: SecurityEvent[];
   selectedId: string | null;
   onSelect: (event: SecurityEvent) => void;
+  compact?: boolean;
+  showDataQuality?: boolean;
 }
 
-export default function EventsTable({ events, selectedId, onSelect }: EventsTableProps) {
+export default function EventsTable({
+  events,
+  selectedId,
+  onSelect,
+  compact = false,
+  showDataQuality = true,
+}: EventsTableProps) {
   return (
-    <table className="events-table">
+    <table className={`events-table${compact ? " compact" : ""}`}>
       <thead>
         <tr>
           <th>Severity</th>
@@ -48,7 +56,7 @@ export default function EventsTable({ events, selectedId, onSelect }: EventsTabl
               <td>
                 <div className="event-title">
                   <span className="event-title-text">{displayValue(event.title)}</span>
-                  <DataQualityBadge issues={issues} inline />
+                  {showDataQuality && <DataQualityBadge issues={issues} inline />}
                 </div>
                 {tags.length > 0 && (
                   <div className="tag-row">
@@ -69,7 +77,7 @@ export default function EventsTable({ events, selectedId, onSelect }: EventsTabl
               </td>
               <td className="cell-ts">
                 {ts.label}
-                {ts.isFuture && (
+                {ts.isFuture && showDataQuality && (
                   <span className="ts-future" title="Timestamp is in the future">
                     {" "}
                     (future)

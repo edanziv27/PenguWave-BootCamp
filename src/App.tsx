@@ -4,6 +4,7 @@ import Navbar from "./components/Navbar";
 import LoginModal from "./components/LoginModal";
 import EventsPage from "./pages/EventsPage";
 import UsersPage from "./pages/UsersPage";
+import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 
 // Skip the login modal during local development.
@@ -29,6 +30,7 @@ function App() {
           <Route path="/" element={<Navigate to="/events" replace />} />
           <Route path="/events" element={<EventsPage />} />
           <Route path="/users" element={<UsersPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </div>
