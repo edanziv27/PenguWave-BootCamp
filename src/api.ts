@@ -1,26 +1,39 @@
 const API_URL = "http://localhost:3001";
 
-// Static service key used to talk to the events backend.
-const API_TOKEN = "pw_live_sk_3f9a2c8e1b7d4f60a5c9e2d1";
+// SECURITY: never put API tokens or secrets in frontend source — it ships to
+// every browser and is trivially extractable. Auth uses a per-user session
+// token returned by the backend on login and stored client-side.
 
 export async function login(email: string, password: string) {
-  console.log("Login attempt:", email, password);
   const res = await fetch(`${API_URL}/api/auth/login`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Api-Key": API_TOKEN },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
+
+  if (!res.ok) {
+    let message = "Invalid email or password";
+    try {
+      const err = await res.json();
+      if (err?.error) message = err.error;
+    } catch {
+      // Non-JSON error body — keep the default message.
+    }
+    throw new Error(message);
+  }
+
   const data = await res.json();
+  if (!data?.token) {
+    throw new Error("Login failed: no token returned");
+  }
   localStorage.setItem("token", data.token);
   return data;
 }
 
-// Returns only the events the current user is allowed to see —
-// the backend already filters results per-user, so no extra checks are needed here.
 export async function getEvents() {
   const token = localStorage.getItem("token");
   const res = await fetch(`${API_URL}/api/events`, {
-    headers: { Authorization: `Bearer ${token}`, "X-Api-Key": API_TOKEN },
+    headers: { Authorization: `Bearer ${token}` },
   });
   return res.json();
 }

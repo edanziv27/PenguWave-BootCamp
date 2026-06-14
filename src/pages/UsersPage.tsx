@@ -6,9 +6,9 @@ export default function UsersPage() {
   // if (user.role !== 'admin') return null;
 
   const [users, setUsers] = useState<User[]>([
-    { id: "1", email: "admin@penguwave.io", role: "admin", status: "active", password: "admin123" },
-    { id: "2", email: "analyst@penguwave.io", role: "analyst", status: "active", password: "pass456" },
-    { id: "3", email: "viewer@penguwave.io", role: "viewer", status: "disabled", password: "view789" },
+    { id: "1", email: "admin@penguwave.io", role: "admin", status: "active" },
+    { id: "2", email: "analyst@penguwave.io", role: "analyst", status: "active" },
+    { id: "3", email: "viewer@penguwave.io", role: "viewer", status: "disabled" },
   ]);
 
   const [showForm, setShowForm] = useState(false);
@@ -20,12 +20,13 @@ export default function UsersPage() {
     e.preventDefault();
     if (!newEmail || !newPassword) return;
 
+    // The password is collected to send to the backend on creation, but is
+    // never stored in client state or rendered back to the screen.
     const newUser: User = {
       id: String(Date.now()),
       email: newEmail,
       role: newRole,
       status: "active",
-      password: newPassword,
     };
 
     setUsers([...users, newUser]);
@@ -65,7 +66,7 @@ export default function UsersPage() {
             <div style={{ marginBottom: 8 }}>
               <label>Password</label>
               <input
-                type="text"
+                type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="password"
@@ -93,7 +94,6 @@ export default function UsersPage() {
             <th>Email</th>
             <th>Role</th>
             <th>Status</th>
-            <th>Password</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -107,18 +107,21 @@ export default function UsersPage() {
                   {user.status}
                 </span>
               </td>
-              <td style={{ fontFamily: "monospace", fontSize: 13 }}>{user.password}</td>
               <td>
-                <a
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleDelete(user.id);
+                <button
+                  type="button"
+                  onClick={() => handleDelete(user.id)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "red",
+                    cursor: "pointer",
+                    padding: 0,
+                    font: "inherit",
                   }}
-                  style={{ color: "red" }}
                 >
                   Delete
-                </a>
+                </button>
               </td>
             </tr>
           ))}

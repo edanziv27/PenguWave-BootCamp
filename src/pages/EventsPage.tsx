@@ -1,7 +1,25 @@
 import { useState } from "react";
 import mockEvents from "../../data/mock_events.json";
 import { SecurityEvent } from "../types";
-import { sanitizeHtml } from "../utils";
+import { severityColor, displayValue, formatTimestamp, eventDataIssues } from "../utils";
+
+function SeverityBadge({ severity }: { severity: string }) {
+  return (
+    <span
+      style={{
+        backgroundColor: severityColor(severity),
+        color: "white",
+        padding: "2px 8px",
+        borderRadius: 4,
+        fontSize: 12,
+        fontWeight: 600,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {displayValue(severity)}
+    </span>
+  );
+}
 
 export default function EventsPage() {
   const [search, setSearch] = useState("");
@@ -11,19 +29,14 @@ export default function EventsPage() {
   const events = mockEvents as SecurityEvent[];
 
   const filtered = events.filter((e) => {
+    const q = search.toLowerCase();
     const matchesSearch =
-      e.title.toLowerCase().includes(search.toLowerCase()) ||
-      e.description.toLowerCase().includes(search.toLowerCase()) ||
-      e.assetHostname.toLowerCase().includes(search.toLowerCase());
+      (e.title ?? "").toLowerCase().includes(q) ||
+      (e.description ?? "").toLowerCase().includes(q) ||
+      (e.assetHostname ?? "").toLowerCase().includes(q);
     const matchesSeverity = severityFilter === "ALL" || e.severity === severityFilter;
     return matchesSearch && matchesSeverity;
   });
-
-  const severityColor = (s: string) => {
-    if (s === "HIGH") return "red";
-    if (s === "MEDIUM") return "orange";
-    return "green";
-  };
 
   return (
     <div className="page-container">
@@ -43,6 +56,7 @@ export default function EventsPage() {
           style={{ width: 140 }}
         >
           <option value="ALL">All Severities</option>
+          <option value="CRITICAL">Critical</option>
           <option value="HIGH">High</option>
           <option value="MEDIUM">Medium</option>
           <option value="LOW">Low</option>
@@ -51,12 +65,7 @@ export default function EventsPage() {
 
       {search && (
         <p>
-          <span
-            dangerouslySetInnerHTML={{
-              __html: sanitizeHtml("Showing results for: <strong>" + search + "</strong>"),
-            }}
-          />
-          {" "}({filtered.length} events)
+          Showing results for: <strong>{search}</strong> ({filtered.length} events)
         </p>
       )}
 
@@ -71,27 +80,52 @@ export default function EventsPage() {
           </tr>
         </thead>
         <tbody>
-          {filtered.map((event) => (
-            <tr
-              key={event.id}
-              onClick={() => setSelectedEvent(event)}
-              style={{ cursor: "pointer" }}
-            >
-              <td style={{ color: severityColor(event.severity), fontWeight: 600 }}>
-                {event.severity}
-              </td>
-              <td>{event.title}</td>
-              <td style={{ fontFamily: "monospace", fontSize: 13 }}>
-                {event.assetHostname}
-              </td>
-              <td style={{ fontFamily: "monospace", fontSize: 13 }}>
-                {event.sourceIp}
-              </td>
-              <td style={{ fontSize: 13 }}>
-                {new Date(event.timestamp).toLocaleString()}
-              </td>
-            </tr>
-          ))}
+          {filtered.map((event) => {
+            const ts = formatTimestamp(event.timestamp);
+            const issues = eventDataIssues(event);
+            return (
+              <tr
+                key={event.id}
+                onClick={() => setSelectedEvent(event)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setSelectedEvent(event);
+                  }
+                }}
+                tabIndex={0}
+                role="button"
+                aria-label={`View details for ${displayValue(event.title)}`}
+                style={{ cursor: "pointer" }}
+              >
+                <td>
+                  <SeverityBadge severity={event.severity} />
+                </td>
+                <td>
+                  {displayValue(event.title)}
+                  {issues.length > 0 && (
+                    <span title={issues.join("; ")} style={{ marginLeft: 6, cursor: "help" }}>
+                      ⚠️
+                    </span>
+                  )}
+                </td>
+                <td style={{ fontFamily: "monospace", fontSize: 13 }}>
+                  {displayValue(event.assetHostname)}
+                </td>
+                <td style={{ fontFamily: "monospace", fontSize: 13 }}>
+                  {displayValue(event.sourceIp)}
+                </td>
+                <td style={{ fontSize: 13 }}>
+                  {ts.label}
+                  {ts.isFuture && (
+                    <span style={{ color: "#b71c1c", marginLeft: 6 }} title="Timestamp is in the future">
+                      (future)
+                    </span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
 
@@ -118,37 +152,46 @@ export default function EventsPage() {
       {selectedEvent && (
         <div className="event-detail">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h2>{selectedEvent.title}</h2>
+            <h2>{displayValue(selectedEvent.title)}</h2>
             <button onClick={() => setSelectedEvent(null)} style={{ cursor: "pointer" }}>
               Close
             </button>
           </div>
+
+          {eventDataIssues(selectedEvent).length > 0 && (
+            <p
+              style={{
+                background: "#fff8e1",
+                border: "1px solid #ffe082",
+                padding: "8px 10px",
+                fontSize: 13,
+              }}
+            >
+              ⚠️ Data quality: {eventDataIssues(selectedEvent).join("; ")}
+            </p>
+          )}
+
           <p>
-            <strong>Severity:</strong>{" "}
-            <span style={{ color: severityColor(selectedEvent.severity) }}>
-              {selectedEvent.severity}
-            </span>
+            <strong>Severity:</strong> <SeverityBadge severity={selectedEvent.severity} />
           </p>
           <p>
             <strong>Description:</strong>
           </p>
-          {/* render rich text descriptions */}
-          <div
-            ref={(el) => {
-              if (el) el.innerHTML = sanitizeHtml(selectedEvent.description);
-            }}
-          />
+          <div style={{ whiteSpace: "pre-wrap" }}>
+            {displayValue(selectedEvent.description, "(no description)")}
+          </div>
           <p>
-            <strong>Asset:</strong> {selectedEvent.assetHostname} ({selectedEvent.assetIp})
+            <strong>Asset:</strong> {displayValue(selectedEvent.assetHostname)} (
+            {displayValue(selectedEvent.assetIp)})
           </p>
           <p>
-            <strong>Source IP:</strong> {selectedEvent.sourceIp}
+            <strong>Source IP:</strong> {displayValue(selectedEvent.sourceIp)}
           </p>
           <p>
-            <strong>Tags:</strong> {selectedEvent.tags.join(", ")}
+            <strong>Tags:</strong> {displayValue((selectedEvent.tags ?? []).join(", "))}
           </p>
           <p>
-            <strong>Timestamp:</strong> {new Date(selectedEvent.timestamp).toLocaleString()}
+            <strong>Timestamp:</strong> {formatTimestamp(selectedEvent.timestamp).label}
           </p>
           <h3>Raw Event Data</h3>
           <pre>{JSON.stringify(selectedEvent, null, 2)}</pre>

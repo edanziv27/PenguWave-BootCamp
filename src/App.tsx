@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import LoginModal from "./components/LoginModal";
@@ -10,16 +10,11 @@ import NotFound from "./pages/NotFound";
 const DEBUG_BYPASS_AUTH = false;
 
 function App() {
-  const [showLogin, setShowLogin] = useState(false);
-
-  // Show login modal on first visit
-  useEffect(() => {
-    if (DEBUG_BYPASS_AUTH) return;
-    const dismissed = sessionStorage.getItem("login-dismissed");
-    if (!dismissed) {
-      setShowLogin(true);
-    }
-  }, []);
+  // Show the login modal on first visit. Computed once as initial state to
+  // avoid a setState-in-effect cascade.
+  const [showLogin, setShowLogin] = useState(
+    () => !DEBUG_BYPASS_AUTH && sessionStorage.getItem("login-dismissed") !== "true"
+  );
 
   const handleCloseLogin = () => {
     sessionStorage.setItem("login-dismissed", "true");
