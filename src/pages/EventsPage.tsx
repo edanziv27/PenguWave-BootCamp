@@ -2,6 +2,7 @@ import { useState } from "react";
 import mockEvents from "../../data/mock_events.json";
 import { SecurityEvent } from "../types";
 import { severityColor, displayValue, formatTimestamp, eventDataIssues } from "../utils";
+import EventsOverview from "../components/EventsOverview";
 
 function SeverityBadge({ severity }: { severity: string }) {
   return (
@@ -42,6 +43,8 @@ export default function EventsPage() {
     <div className="page-container">
       <h1>Security Events</h1>
 
+      <EventsOverview events={filtered} />
+
       <div style={{ marginBottom: 16, display: "flex", gap: 12, alignItems: "center" }}>
         <input
           type="text"
@@ -65,9 +68,13 @@ export default function EventsPage() {
 
       {search && (
         <p>
-          Showing results for: <strong>{search}</strong> ({filtered.length} events)
+          Showing results for: <strong>{search}</strong>
         </p>
       )}
+
+      <p className="table-meta">
+        Showing {filtered.length} of {events.length} events
+      </p>
 
       <table>
         <thead>
@@ -118,7 +125,7 @@ export default function EventsPage() {
                 <td style={{ fontSize: 13 }}>
                   {ts.label}
                   {ts.isFuture && (
-                    <span style={{ color: "#b71c1c", marginLeft: 6 }} title="Timestamp is in the future">
+                    <span style={{ color: "#ff5470", marginLeft: 6 }} title="Timestamp is in the future">
                       (future)
                     </span>
                   )}
@@ -161,8 +168,10 @@ export default function EventsPage() {
           {eventDataIssues(selectedEvent).length > 0 && (
             <p
               style={{
-                background: "#fff8e1",
-                border: "1px solid #ffe082",
+                background: "rgba(255, 148, 71, 0.12)",
+                border: "1px solid rgba(255, 148, 71, 0.4)",
+                color: "#ffb784",
+                borderRadius: 8,
                 padding: "8px 10px",
                 fontSize: 13,
               }}
